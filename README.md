@@ -24,3 +24,7 @@ Windows 用の 64bit 常駐スクリーンショットアプリです。撮影�
 PowerShell で `./build.ps1` を実行します。Windows に付属する .NET Framework の 64bit C# コンパイラを使用し、`dist/ScreenClip.exe` を生成します。Visual Studio では `ScreenClip.csproj` も開けます。
 
 設定は `%APPDATA%\ScreenClip\settings.json` に保存されます。JPG は品質 90 で保存します。
+
+## CI の成果物
+
+`main` への push と手動実行で [Build Windows x64](https://github.com/crono2250/ScreenClip/actions/workflows/windows-build.yml) がテストと x64 ビルドを行います。実行結果の **Artifacts** に `ScreenClip-windows-x64` が表示され、実行ファイル、設定ファイル、SHA-256 チェックサムをダウンロードできます。成果物は 30 日間保持されます。GitHub の Artifacts をダウンロードするにはサインインが必要です。

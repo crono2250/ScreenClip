@@ -1,0 +1,66 @@
+name: Build Windows x64
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Run smoke tests
+        shell: pwsh
+        run: ./tests/run.ps1
+
+      - name: Build 64-bit app
+        shell: pwsh
+        run: ./build.ps1
+
+      - name: Verify version and write checksums
+        shell: pwsh
+        env:
+          EXPECTED_COMMIT: ${{ github.sha }}
+        run: |
+          $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path 'dist/ScreenClip.exe').Path)
+          $version = $assembly.GetCustomAttributes([Reflection.AssemblyInformationalVersionAttribute], $false)[0].InformationalVersion
+          if ($version -ne $env:EXPECTED_COMMIT) { throw "Embedded commit ID does not match the workflow commit." }
+
+          $names = @('ScreenClip.exe', 'ScreenClip.exe.config')
+          $checksums = foreach ($name in $names) {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'dist' $name)).Hash.ToLowerInvariant()
+            "$hash  $name"
+          }
+          $checksums | Set-Content -LiteralPath 'dist/SHA256SUMS' -Encoding ascii
+
+      - name: Publish build artifact
+        id: upload
+        uses: actions/upload-artifact@v7
+        with:
+          name: ScreenClip-windows-x64
+          path: |
+            dist/ScreenClip.exe
+            dist/ScreenClip.exe.config
+            dist/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Show artifact link
+        shell: pwsh
+        env:
+          ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        run: |
+          Add-Content -LiteralPath $env:GITHUB_STEP_SUMMARY -Value @(
+            '### ScreenClip Windows x64'
+            "- Commit: $env:GITHUB_SHA"
+            "- Artifact: [ScreenClip-windows-x64]($env:ARTIFACT_URL)"
+            '- Contents: ScreenClip.exe, ScreenClip.exe.config, SHA256SUMS'
+          )

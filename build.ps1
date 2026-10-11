@@ -26,4 +26,4 @@ $sources = @('Program.cs', 'AppSettings.cs', 'CaptureOverlay.cs', 'EditorForm.cs
     /reference:System.Windows.Forms.dll /reference:System.Runtime.Serialization.dll $sources $generated
 if ($LASTEXITCODE -ne 0) { throw "ビルドに失敗しました: $LASTEXITCODE" }
 Copy-Item -LiteralPath (Join-Path $root 'App.config') -Destination (Join-Path $output 'ScreenClip.exe.config') -Force
-Write-Host "完成: $exe (commit: $commit)"
+Write-Host "完成: dist/ScreenClip.exe (commit: $commit)"
