@@ -1,0 +1,4 @@
+/dist/
+/obj/
+/tests/*.exe
+/tests/*.exe.config
