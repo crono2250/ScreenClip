@@ -18,7 +18,7 @@ using System.Reflection;
 [assembly: AssemblyInformationalVersion("$commit")]
 namespace ScreenClip { internal static class BuildCommit { public const string Id = "$commit"; } }
 "@ | Set-Content -LiteralPath $generated -Encoding UTF8
-$sources = @('Program.cs', 'AppSettings.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs') |
+$sources = @('Program.cs', 'AppSettings.cs', 'StartupRegistration.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs') |
     ForEach-Object { Join-Path $root $_ }
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 /define:BUILD_COMMIT `
     "/out:$exe" `

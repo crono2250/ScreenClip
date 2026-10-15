@@ -14,21 +14,23 @@ namespace ScreenClip
         private static Mutex singleInstance;
 
         [STAThread]
-        private static void Main()
+        private static void Main(string[] args)
         {
+            bool launchedAtStartup = Array.IndexOf(args, StartupRegistration.Argument) >= 0;
             bool created;
             singleInstance = new Mutex(true, "Local\\ScreenClip_90c2ec55_42c3_4ba2_a482_806d209fc8a8", out created);
             if (!created)
             {
-                MessageBox.Show("ScreenClip は既に起動しています。通知領域のアイコンから操作してください。",
-                    "ScreenClip", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                if (!launchedAtStartup)
+                    MessageBox.Show("ScreenClip は既に起動しています。通知領域のアイコンから操作してください。",
+                        "ScreenClip", MessageBoxButtons.OK, MessageBoxIcon.Information);
                 singleInstance.Dispose();
                 return;
             }
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            try { Application.Run(new TrayContext()); }
+            try { Application.Run(new TrayContext(launchedAtStartup)); }
             finally
             {
                 singleInstance.ReleaseMutex();
@@ -47,7 +49,7 @@ namespace ScreenClip
         private EditorForm editor;
         private SettingsForm settingsForm;
 
-        public TrayContext()
+        public TrayContext(bool launchedAtStartup)
         {
             settings = SettingsStore.Load();
             trayIcon = CreateIcon();
@@ -65,6 +67,16 @@ namespace ScreenClip
                 tray.ShowBalloonTip(6000, "ScreenClip",
                     "ホットキーを登録できませんでした。通知領域の設定から別のキーに変更してください。",
                     ToolTipIcon.Warning);
+            }
+            if (!launchedAtStartup)
+            {
+                try { StartupRegistration.Apply(settings.StartWithWindows == true); }
+                catch (Exception)
+                {
+                    tray.ShowBalloonTip(6000, "ScreenClip",
+                        "Windows サインイン時の自動起動を設定できませんでした。通知領域の設定から再試行してください。",
+                        ToolTipIcon.Warning);
+                }
             }
         }
 
@@ -181,12 +193,15 @@ namespace ScreenClip
             }
             try
             {
+                StartupRegistration.Apply(next.StartWithWindows == true);
                 SettingsStore.Save(next);
                 settings = next;
             }
             catch (Exception ex)
             {
                 hotkeyWindow.Register(previous);
+                try { StartupRegistration.Apply(previous.StartWithWindows == true); }
+                catch (Exception) { }
                 MessageBox.Show("設定を保存できませんでした。\n" + ex.Message,
                     "ScreenClip", MessageBoxButtons.OK, MessageBoxIcon.Error);
             }

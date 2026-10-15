@@ -1,6 +1,8 @@
 using System;
 using System.Drawing;
+using System.IO;
 using System.Reflection;
+using System.Text;
 using System.Windows.Forms;
 
 namespace ScreenClip
@@ -16,7 +18,8 @@ namespace ScreenClip
                 TestBlackoutAndUndo();
                 TestRedFrame();
                 TestHotkeyEntry();
-                Console.WriteLine("OK: crop, blackout, undo, red frame, hotkey entry");
+                TestStartupSettings();
+                Console.WriteLine("OK: crop, blackout, undo, red frame, hotkey entry, startup settings");
                 return 0;
             }
             catch (Exception ex)
@@ -98,6 +101,27 @@ namespace ScreenClip
                     input.Text != "PrintScreen")
                     throw new Exception("PrintScreen entry failed");
             }
+        }
+
+        private static void TestStartupSettings()
+        {
+            const string oldJson = "{\"ImageFormat\":\"png\",\"KeyCode\":83,\"Modifiers\":6,\"SaveDirectory\":\"\"}";
+            const string disabledJson = "{\"ImageFormat\":\"png\",\"KeyCode\":83,\"Modifiers\":6,\"SaveDirectory\":\"\",\"StartWithWindows\":false}";
+            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(oldJson)))
+            {
+                AppSettings previous = SettingsStore.Read(stream);
+                if (previous.StartWithWindows != true || previous.KeyCode != 83)
+                    throw new Exception("Existing settings startup migration failed");
+            }
+            using (var stream = new MemoryStream(Encoding.UTF8.GetBytes(disabledJson)))
+            {
+                AppSettings disabled = SettingsStore.Read(stream);
+                if (disabled.StartWithWindows != false || disabled.Copy().StartWithWindows != false)
+                    throw new Exception("Disabled startup setting was lost");
+            }
+            string command = StartupRegistration.CommandFor(@"C:\Program Files\ScreenClip\ScreenClip.exe");
+            if (command != "\"C:\\Program Files\\ScreenClip\\ScreenClip.exe\" --autostart")
+                throw new Exception("Startup command quoting failed");
         }
     }
 }

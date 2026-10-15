@@ -2,7 +2,7 @@ $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
 $compiler = Join-Path $env:WINDIR 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $output = Join-Path $root 'tests\SmokeTests.exe'
-$sources = @('Program.cs', 'AppSettings.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs', 'tests\SmokeTests.cs') |
+$sources = @('Program.cs', 'AppSettings.cs', 'StartupRegistration.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs', 'tests\SmokeTests.cs') |
     ForEach-Object { Join-Path $root $_ }
 & $compiler /nologo /target:exe /platform:x64 /codepage:65001 "/out:$output" `
     /main:ScreenClip.SmokeTests /reference:System.dll /reference:System.Core.dll `

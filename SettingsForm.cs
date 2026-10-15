@@ -10,6 +10,7 @@ namespace ScreenClip
         private readonly HotkeyCaptureBox hotkey;
         private readonly ComboBox format;
         private readonly TextBox directory;
+        private readonly CheckBox startWithWindows;
 
         public AppSettings Result { get; private set; }
 
@@ -20,7 +21,7 @@ namespace ScreenClip
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(550, 345);
+            ClientSize = new Size(550, 385);
             Font = new Font("Yu Gothic UI", 10);
 
             Controls.Add(new Label { Text = "撮影ホットキー", AutoSize = true, Location = new Point(25, 22) });
@@ -51,10 +52,18 @@ namespace ScreenClip
             browse.Click += (s, e) => BrowseDirectory();
             Controls.Add(browse);
 
+            startWithWindows = new CheckBox
+            {
+                Text = "Windows サインイン時に自動起動する",
+                Location = new Point(25, 277), Size = new Size(390, 28),
+                Checked = initial.StartWithWindows == true
+            };
+            Controls.Add(startWithWindows);
+
             var version = new LinkLabel
             {
                 Text = "Version: " + VersionInfo.DisplayVersion,
-                Location = new Point(25, 299), AutoSize = true,
+                Location = new Point(25, 339), AutoSize = true,
                 LinkColor = Color.FromArgb(60, 90, 125),
                 Font = new Font("Yu Gothic UI", 9)
             };
@@ -65,8 +74,8 @@ namespace ScreenClip
             };
             Controls.Add(version);
 
-            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, Location = new Point(321, 292), Size = new Size(95, 34) };
-            var save = new Button { Text = "保存", Location = new Point(423, 292), Size = new Size(88, 34) };
+            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, Location = new Point(321, 332), Size = new Size(95, 34) };
+            var save = new Button { Text = "保存", Location = new Point(423, 332), Size = new Size(88, 34) };
             save.Click += (s, e) => Save();
             Controls.Add(cancel);
             Controls.Add(save);
@@ -98,7 +107,8 @@ namespace ScreenClip
                 Modifiers = hotkey.Modifiers,
                 KeyCode = hotkey.KeyCode,
                 ImageFormat = format.SelectedIndex == 1 ? "jpg" : "png",
-                SaveDirectory = path
+                SaveDirectory = path,
+                StartWithWindows = startWithWindows.Checked
             };
             DialogResult = DialogResult.OK;
             Close();

@@ -13,6 +13,7 @@ namespace ScreenClip
         [DataMember] public int KeyCode { get; set; }
         [DataMember] public string ImageFormat { get; set; }
         [DataMember] public string SaveDirectory { get; set; }
+        [DataMember] public bool? StartWithWindows { get; set; }
 
         public AppSettings()
         {
@@ -20,6 +21,7 @@ namespace ScreenClip
             KeyCode = (int)Keys.S;
             ImageFormat = "png";
             SaveDirectory = "";
+            StartWithWindows = true;
         }
 
         public AppSettings Copy()
@@ -29,7 +31,8 @@ namespace ScreenClip
                 Modifiers = Modifiers,
                 KeyCode = KeyCode,
                 ImageFormat = ImageFormat,
-                SaveDirectory = SaveDirectory
+                SaveDirectory = SaveDirectory,
+                StartWithWindows = StartWithWindows
             };
         }
 
@@ -64,20 +67,24 @@ namespace ScreenClip
             {
                 if (!File.Exists(SettingsPath)) return new AppSettings();
                 using (FileStream stream = File.OpenRead(SettingsPath))
-                {
-                    var serializer = new DataContractJsonSerializer(typeof(AppSettings));
-                    AppSettings settings = (AppSettings)serializer.ReadObject(stream);
-                    if (settings == null || settings.KeyCode == 0 ||
-                        (settings.ImageFormat != "png" && settings.ImageFormat != "jpg"))
-                        return new AppSettings();
-                    if (settings.SaveDirectory == null) settings.SaveDirectory = "";
-                    return settings;
-                }
+                    return Read(stream);
             }
             catch (Exception)
             {
                 return new AppSettings();
             }
+        }
+
+        internal static AppSettings Read(Stream stream)
+        {
+            var serializer = new DataContractJsonSerializer(typeof(AppSettings));
+            AppSettings settings = (AppSettings)serializer.ReadObject(stream);
+            if (settings == null || settings.KeyCode == 0 ||
+                (settings.ImageFormat != "png" && settings.ImageFormat != "jpg"))
+                return new AppSettings();
+            if (settings.SaveDirectory == null) settings.SaveDirectory = "";
+            if (!settings.StartWithWindows.HasValue) settings.StartWithWindows = true;
+            return settings;
         }
 
         public static void Save(AppSettings settings)

@@ -33,6 +33,7 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="AppSettings.cs" />
+    <Compile Include="StartupRegistration.cs" />
     <Compile Include="CaptureOverlay.cs" />
     <Compile Include="EditorForm.cs" />
     <Compile Include="SettingsForm.cs" />
