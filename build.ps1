@@ -18,12 +18,13 @@ using System.Reflection;
 [assembly: AssemblyInformationalVersion("$commit")]
 namespace ScreenClip { internal static class BuildCommit { public const string Id = "$commit"; } }
 "@ | Set-Content -LiteralPath $generated -Encoding UTF8
-$sources = @('Program.cs', 'AppSettings.cs', 'StartupRegistration.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs') |
+$sources = @('Program.cs', 'AppSettings.cs', 'StartupRegistration.cs', 'CaptureOverlay.cs', 'EditorForm.cs', 'SettingsForm.cs', 'HotkeyCaptureBox.cs', 'VersionInfo.cs', 'AutoUpdater.cs', 'UpdateInstaller.cs') |
     ForEach-Object { Join-Path $root $_ }
 & $compiler /nologo /target:winexe /platform:x64 /optimize+ /codepage:65001 /define:BUILD_COMMIT `
     "/out:$exe" `
     /reference:System.dll /reference:System.Core.dll /reference:System.Drawing.dll `
-    /reference:System.Windows.Forms.dll /reference:System.Runtime.Serialization.dll $sources $generated
+    /reference:System.Windows.Forms.dll /reference:System.Runtime.Serialization.dll `
+    /reference:System.Net.Http.dll /reference:System.IO.Compression.dll $sources $generated
 if ($LASTEXITCODE -ne 0) { throw "ビルドに失敗しました: $LASTEXITCODE" }
 Copy-Item -LiteralPath (Join-Path $root 'App.config') -Destination (Join-Path $output 'ScreenClip.exe.config') -Force
 Write-Host "完成: dist/ScreenClip.exe (commit: $commit)"

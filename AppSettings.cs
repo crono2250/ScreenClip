@@ -14,6 +14,8 @@ namespace ScreenClip
         [DataMember] public string ImageFormat { get; set; }
         [DataMember] public string SaveDirectory { get; set; }
         [DataMember] public bool? StartWithWindows { get; set; }
+        [DataMember] public bool? AutoUpdateEnabled { get; set; }
+        [DataMember] public int UpdateIntervalMinutes { get; set; }
 
         public AppSettings()
         {
@@ -22,6 +24,8 @@ namespace ScreenClip
             ImageFormat = "png";
             SaveDirectory = "";
             StartWithWindows = true;
+            AutoUpdateEnabled = true;
+            UpdateIntervalMinutes = 30;
         }
 
         public AppSettings Copy()
@@ -32,7 +36,9 @@ namespace ScreenClip
                 KeyCode = KeyCode,
                 ImageFormat = ImageFormat,
                 SaveDirectory = SaveDirectory,
-                StartWithWindows = StartWithWindows
+                StartWithWindows = StartWithWindows,
+                AutoUpdateEnabled = AutoUpdateEnabled,
+                UpdateIntervalMinutes = UpdateIntervalMinutes
             };
         }
 
@@ -84,6 +90,9 @@ namespace ScreenClip
                 return new AppSettings();
             if (settings.SaveDirectory == null) settings.SaveDirectory = "";
             if (!settings.StartWithWindows.HasValue) settings.StartWithWindows = true;
+            if (!settings.AutoUpdateEnabled.HasValue) settings.AutoUpdateEnabled = true;
+            if (settings.UpdateIntervalMinutes < 5 || settings.UpdateIntervalMinutes > 1440)
+                settings.UpdateIntervalMinutes = 30;
             return settings;
         }
 

@@ -11,6 +11,8 @@ namespace ScreenClip
         private readonly ComboBox format;
         private readonly TextBox directory;
         private readonly CheckBox startWithWindows;
+        private readonly CheckBox autoUpdate;
+        private readonly NumericUpDown updateInterval;
 
         public AppSettings Result { get; private set; }
 
@@ -21,7 +23,7 @@ namespace ScreenClip
             FormBorderStyle = FormBorderStyle.FixedDialog;
             MaximizeBox = false;
             MinimizeBox = false;
-            ClientSize = new Size(550, 385);
+            ClientSize = new Size(550, 505);
             Font = new Font("Yu Gothic UI", 10);
 
             Controls.Add(new Label { Text = "撮影ホットキー", AutoSize = true, Location = new Point(25, 22) });
@@ -60,10 +62,31 @@ namespace ScreenClip
             };
             Controls.Add(startWithWindows);
 
+            autoUpdate = new CheckBox
+            {
+                Text = "GitHub Releases から自動更新する",
+                Location = new Point(25, 315), Size = new Size(390, 28),
+                Checked = initial.AutoUpdateEnabled == true
+            };
+            Controls.Add(autoUpdate);
+            Controls.Add(new Label { Text = "確認間隔（分）", AutoSize = true, Location = new Point(25, 357) });
+            updateInterval = new NumericUpDown
+            {
+                Location = new Point(165, 353), Width = 90, Minimum = 5, Maximum = 1440,
+                Value = Math.Max(5, Math.Min(1440, initial.UpdateIntervalMinutes))
+            };
+            Controls.Add(updateInterval);
+            Controls.Add(new Label
+            {
+                Text = "トークンや GitHub へのログインは不要です。\n撮影・編集・設定画面を閉じてから、更新して自動で再起動します。",
+                Location = new Point(25, 399), Size = new Size(495, 44),
+                ForeColor = Color.FromArgb(90, 105, 120), Font = new Font("Yu Gothic UI", 9)
+            });
+
             var version = new LinkLabel
             {
                 Text = "Version: " + VersionInfo.DisplayVersion,
-                Location = new Point(25, 339), AutoSize = true,
+                Location = new Point(25, 459), AutoSize = true,
                 LinkColor = Color.FromArgb(60, 90, 125),
                 Font = new Font("Yu Gothic UI", 9)
             };
@@ -74,8 +97,8 @@ namespace ScreenClip
             };
             Controls.Add(version);
 
-            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, Location = new Point(321, 332), Size = new Size(95, 34) };
-            var save = new Button { Text = "保存", Location = new Point(423, 332), Size = new Size(88, 34) };
+            var cancel = new Button { Text = "キャンセル", DialogResult = DialogResult.Cancel, Location = new Point(321, 452), Size = new Size(95, 34) };
+            var save = new Button { Text = "保存", Location = new Point(423, 452), Size = new Size(88, 34) };
             save.Click += (s, e) => Save();
             Controls.Add(cancel);
             Controls.Add(save);
@@ -108,7 +131,9 @@ namespace ScreenClip
                 KeyCode = hotkey.KeyCode,
                 ImageFormat = format.SelectedIndex == 1 ? "jpg" : "png",
                 SaveDirectory = path,
-                StartWithWindows = startWithWindows.Checked
+                StartWithWindows = startWithWindows.Checked,
+                AutoUpdateEnabled = autoUpdate.Checked,
+                UpdateIntervalMinutes = (int)updateInterval.Value
             };
             DialogResult = DialogResult.OK;
             Close();

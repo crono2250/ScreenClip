@@ -25,21 +25,12 @@ jobs:
         shell: pwsh
         run: ./build.ps1
 
-      - name: Verify version and write checksums
+      - name: Package release and update manifest
         shell: pwsh
         env:
-          EXPECTED_COMMIT: ${{ github.sha }}
+          BUILD_COMMIT: ${{ github.sha }}
         run: |
-          $assembly = [Reflection.Assembly]::LoadFile((Resolve-Path 'dist/ScreenClip.exe').Path)
-          $version = $assembly.GetCustomAttributes([Reflection.AssemblyInformationalVersionAttribute], $false)[0].InformationalVersion
-          if ($version -ne $env:EXPECTED_COMMIT) { throw "Embedded commit ID does not match the workflow commit." }
-
-          $names = @('ScreenClip.exe', 'ScreenClip.exe.config')
-          $checksums = foreach ($name in $names) {
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path 'dist' $name)).Hash.ToLowerInvariant()
-            "$hash  $name"
-          }
-          $checksums | Set-Content -LiteralPath 'dist/SHA256SUMS' -Encoding ascii
+          ./package.ps1 -Commit $env:BUILD_COMMIT -ReleaseTag "build-$env:BUILD_COMMIT-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
 
       - name: Publish build artifact
         id: upload
@@ -50,6 +41,8 @@ jobs:
             dist/ScreenClip.exe
             dist/ScreenClip.exe.config
             dist/SHA256SUMS
+            dist/ScreenClip-windows-x64.zip
+            dist/update.json
           if-no-files-found: error
           retention-days: 30
 
@@ -62,5 +55,32 @@ jobs:
             '### ScreenClip Windows x64'
             "- Commit: $env:GITHUB_SHA"
             "- Artifact: [ScreenClip-windows-x64]($env:ARTIFACT_URL)"
-            '- Contents: ScreenClip.exe, ScreenClip.exe.config, SHA256SUMS'
+            '- Contents: ScreenClip.exe, ScreenClip.exe.config, SHA256SUMS, ScreenClip-windows-x64.zip, update.json'
           )
+
+  publish:
+    needs: build
+    if: github.repository == 'crono2250/ScreenClip' && github.ref == 'refs/heads/main'
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    concurrency:
+      group: screenclip-release
+      cancel-in-progress: false
+    steps:
+      - name: Check out publishing script
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Download tested build
+        uses: actions/download-artifact@v8
+        with:
+          name: ScreenClip-windows-x64
+          path: dist
+
+      - name: Publish complete release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: ./publish.ps1

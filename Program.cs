@@ -5,6 +5,7 @@ using System.IO;
 using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ScreenClip
@@ -16,6 +17,11 @@ namespace ScreenClip
         [STAThread]
         private static void Main(string[] args)
         {
+            if (args.Length == 2 && args[0] == UpdateInstaller.ApplyArgument)
+            {
+                UpdateInstaller.Run(args[1]);
+                return;
+            }
             bool launchedAtStartup = Array.IndexOf(args, StartupRegistration.Argument) >= 0;
             bool created;
             singleInstance = new Mutex(true, "Local\\ScreenClip_90c2ec55_42c3_4ba2_a482_806d209fc8a8", out created);
@@ -30,7 +36,19 @@ namespace ScreenClip
 
             Application.EnableVisualStyles();
             Application.SetCompatibleTextRenderingDefault(false);
-            try { Application.Run(new TrayContext(launchedAtStartup)); }
+            string updatedId = args.Length == 2 && args[0] == UpdateInstaller.UpdatedArgument ? args[1] : null;
+            bool updateFailed = args.Length == 2 && args[0] == UpdateInstaller.FailedArgument;
+            try
+            {
+                var context = new TrayContext(launchedAtStartup, updateFailed);
+                if (updatedId != null)
+                {
+                    EventHandler ready = null;
+                    ready = (s, e) => { Application.Idle -= ready; UpdateInstaller.ConfirmStartup(updatedId); };
+                    Application.Idle += ready;
+                }
+                Application.Run(context);
+            }
             finally
             {
                 singleInstance.ReleaseMutex();
@@ -48,20 +66,48 @@ namespace ScreenClip
         private CaptureOverlay overlay;
         private EditorForm editor;
         private SettingsForm settingsForm;
+        private readonly AutoUpdater updater;
+        private readonly System.Windows.Forms.Timer updateTimer;
+        private readonly ToolStripMenuItem checkUpdateMenu;
+        private CancellationTokenSource updateCancellation = new CancellationTokenSource();
+        private UpdatePackage pendingUpdate;
+        private DateTime nextUpdateCheck = DateTime.UtcNow.AddSeconds(10);
+        private bool checkingUpdate;
+        private bool exiting;
+        private bool applyingUpdate;
+        private bool updateFailureShown;
 
-        public TrayContext(bool launchedAtStartup)
+        public TrayContext(bool launchedAtStartup, bool updateFailed)
         {
             settings = SettingsStore.Load();
             trayIcon = CreateIcon();
             var menu = new ContextMenuStrip();
             menu.Items.Add("範囲を撮影", null, (s, e) => Capture());
             menu.Items.Add("設定", null, (s, e) => OpenSettings());
+            checkUpdateMenu = new ToolStripMenuItem("今すぐ更新を確認");
+            checkUpdateMenu.Click += async (s, e) => await CheckForUpdateAsync(true);
+            menu.Items.Add(checkUpdateMenu);
             menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add("終了", null, (s, e) => ExitThread());
             tray = new NotifyIcon { Icon = trayIcon, Text = "ScreenClip", ContextMenuStrip = menu, Visible = true };
             tray.DoubleClick += (s, e) => Capture();
 
             hotkeyWindow = new HotkeyWindow(Capture);
+            updater = new AutoUpdater();
+            updateTimer = new System.Windows.Forms.Timer { Interval = 1000 };
+            updateTimer.Tick += async (s, e) =>
+            {
+                if (pendingUpdate != null) { TryApplyUpdate(); return; }
+                if (DateTime.UtcNow >= nextUpdateCheck && settings.AutoUpdateEnabled == true)
+                {
+                    nextUpdateCheck = DateTime.UtcNow.AddMinutes(settings.UpdateIntervalMinutes);
+                    await CheckForUpdateAsync(false);
+                }
+            };
+            updateTimer.Start();
+            UpdateInstaller.CleanOldDirectories();
+            if (updateFailed)
+                tray.ShowBalloonTip(10000, "ScreenClip の更新", "更新版を起動できなかったため、旧版に戻しました。更新ログを確認してください。", ToolTipIcon.Warning);
             if (!hotkeyWindow.Register(settings))
             {
                 tray.ShowBalloonTip(6000, "ScreenClip",
@@ -97,6 +143,7 @@ namespace ScreenClip
 
         private void Capture()
         {
+            if (applyingUpdate || exiting) return;
             if (overlay != null || editor != null || settingsForm != null) return;
             Bitmap desktop = null;
             try
@@ -176,6 +223,7 @@ namespace ScreenClip
 
         private void OpenSettings()
         {
+            if (applyingUpdate || exiting) return;
             if (settingsForm != null) { settingsForm.Activate(); return; }
             SettingsForm dialog = new SettingsForm(settings.Copy());
             settingsForm = dialog;
@@ -196,6 +244,12 @@ namespace ScreenClip
                 StartupRegistration.Apply(next.StartWithWindows == true);
                 SettingsStore.Save(next);
                 settings = next;
+                updateCancellation.Cancel();
+                updateCancellation.Dispose();
+                updateCancellation = new CancellationTokenSource();
+                if (pendingUpdate != null) { pendingUpdate.Dispose(); pendingUpdate = null; }
+                nextUpdateCheck = DateTime.UtcNow.AddSeconds(2);
+                updateFailureShown = false;
             }
             catch (Exception ex)
             {
@@ -207,8 +261,94 @@ namespace ScreenClip
             }
         }
 
+        private async Task CheckForUpdateAsync(bool manual)
+        {
+            if (exiting || checkingUpdate || applyingUpdate) return;
+            if (pendingUpdate != null)
+            {
+                tray.ShowBalloonTip(6000, "ScreenClip の更新", "更新を準備済みです。撮影・編集・設定画面を閉じると再起動します。", ToolTipIcon.Info);
+                TryApplyUpdate();
+                return;
+            }
+            checkingUpdate = true;
+            checkUpdateMenu.Enabled = false;
+            checkUpdateMenu.Text = "更新を確認中…";
+            CancellationToken cancellation = updateCancellation.Token;
+            try
+            {
+                // Saving settings cancels the old request.
+                UpdatePackage package = await updater.CheckAsync(VersionInfo.CommitId, UpdateInstaller.StagingRoot, cancellation,
+                    manual ? null : UpdateInstaller.FailedCommit);
+                if (exiting || cancellation.IsCancellationRequested)
+                {
+                    if (package != null) package.Dispose();
+                    return;
+                }
+                nextUpdateCheck = DateTime.UtcNow.AddMinutes(settings.UpdateIntervalMinutes);
+                updateFailureShown = false;
+                if (package == null) return;
+                pendingUpdate = package;
+                if (overlay != null || editor != null || settingsForm != null)
+                    tray.ShowBalloonTip(8000, "ScreenClip の更新", "新しい版をダウンロードしました。撮影・編集・設定画面を閉じると再起動します。", ToolTipIcon.Info);
+                TryApplyUpdate();
+            }
+            catch (Exception ex)
+            {
+                if (!exiting && !cancellation.IsCancellationRequested) ReportUpdateFailure(ex, manual);
+            }
+            finally
+            {
+                checkingUpdate = false;
+                if (!exiting)
+                {
+                    checkUpdateMenu.Enabled = true;
+                    checkUpdateMenu.Text = "今すぐ更新を確認";
+                }
+            }
+        }
+
+        private void TryApplyUpdate()
+        {
+            if (exiting || applyingUpdate || pendingUpdate == null || overlay != null || editor != null || settingsForm != null) return;
+            try
+            {
+                applyingUpdate = true;
+                UpdateInstaller.Begin(pendingUpdate);
+                // The helper owns the staging files from here and waits for this process to exit.
+                pendingUpdate = null;
+                ExitThread();
+            }
+            catch (Exception ex)
+            {
+                applyingUpdate = false;
+                if (pendingUpdate != null) { pendingUpdate.Dispose(); pendingUpdate = null; }
+                nextUpdateCheck = DateTime.UtcNow.AddMinutes(settings.UpdateIntervalMinutes);
+                ReportUpdateFailure(ex, true);
+            }
+        }
+
+        private void ReportUpdateFailure(Exception error, bool manual)
+        {
+            string message;
+            if (error is InvalidDataException || error is InvalidOperationException) message = error.Message;
+            else if (error is UnauthorizedAccessException) message = "インストール先に書き込めません。書き込み可能なフォルダーにアプリを置いてください。";
+            else if (error is IOException) message = "更新ファイルを読み書きできませんでした。ディスク容量とファイルの使用状況を確認してください。";
+            else message = "更新を確認できませんでした。ネットワーク接続を確認してください。";
+            UpdateInstaller.WriteLog(message);
+            if (manual || !updateFailureShown)
+                tray.ShowBalloonTip(8000, "ScreenClip の更新", message, ToolTipIcon.Warning);
+            updateFailureShown = true;
+        }
+
         protected override void ExitThreadCore()
         {
+            exiting = true;
+            updateTimer.Stop();
+            updateTimer.Dispose();
+            updateCancellation.Cancel();
+            updateCancellation.Dispose();
+            updater.Dispose();
+            if (pendingUpdate != null) { pendingUpdate.Dispose(); pendingUpdate = null; }
             if (overlay != null) overlay.Close();
             if (editor != null) editor.Close();
             if (settingsForm != null) settingsForm.Close();

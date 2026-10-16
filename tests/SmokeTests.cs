@@ -19,7 +19,8 @@ namespace ScreenClip
                 TestRedFrame();
                 TestHotkeyEntry();
                 TestStartupSettings();
-                Console.WriteLine("OK: crop, blackout, undo, red frame, hotkey entry, startup settings");
+                UpdateTests.Run();
+                Console.WriteLine("OK: crop, blackout, undo, red frame, hotkey entry, startup settings, automatic updates");
                 return 0;
             }
             catch (Exception ex)

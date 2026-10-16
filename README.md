@@ -16,6 +16,24 @@ Windows 用の 64bit 常駐スクリーンショットアプリです。撮影�
 
 自動起動は現在のユーザーが Windows にサインインした後に行われます。実行ファイルを移動した場合は新しい場所から一度起動すると登録先が更新されます。
 
+## 自動更新
+
+GitHub へのログインや個人用トークンの設定は不要です。起動約 10 秒後と、その後は初期設定で 30 分ごとに、公開された GitHub Release の `update.json` を確認します。
+
+通知領域の「設定」の「GitHub Releases から自動更新する」で有効・無効を切り替えられます。初期状態は有効で、確認間隔は 5～1440 分で変更できます。「今すぐ更新を確認」から手動でも実行できます。旧版で保存したホットキー・保存先・自動更新の設定も引き継ぎます。以前のトークン項目は読み取り時に無視され、設定を保存し直すと削除されます。
+
+新しい更新がない場合は、自動確認・手動確認ともに通知を表示しません。初回 Release が未公開などで `update.json` が存在しない場合も、通知せず現在の版を使い続けます。更新の取得・検証・適用に失敗した場合の通知は表示します。
+
+通常の確認は `https://github.com/crono2250/ScreenClip/releases/latest/download/update.json` の取得だけで、GitHub API は使用しません。新しいコミットを検出した時だけ、認証不要の公開比較 API で現在のコミットより先の履歴かを確認します。手元のビルドが配布版より新しい場合は旧版に戻りません。履歴の分岐、通信エラー、公開 API の利用制限がある場合は現在の版を使い続け、通知とログに理由を残します。
+
+`update.json` はスキーマ番号、リポジトリ、`main` ブランチ、コミット ID、リリースタグ、ZIP の固定 URL、SHA-256、サイズを含みます。取得途中に Latest が変わっても、同じリリースの ZIP を取得します。配布元・サイズ・ZIP の SHA-256・`SHA256SUMS` の各ファイルのハッシュ・x64 ビルド・埋め込みコミット ID を検証します。転送先も HTTPS の GitHub 配布ドメインに限定します。
+
+撮影・編集・設定画面を開いている間は再起動を待ち、すべて閉じると実行ファイルと `.config` だけを差し替えて同じ場所から再起動します。保存した画像やユーザー設定は保持されます。
+
+更新版の起動を 15 秒以内に確認できない場合や差し替えに失敗した場合は、元のファイルに復元して旧版を再起動します。同じコミットでの自動再試行は停止し、新しいコミットができた時に再開します。「今すぐ更新を確認」では失敗したコミットも再試行できます。最後の更新結果は `%LOCALAPPDATA%\ScreenClip\Updates\last-update.log` に保存します。
+
+アプリは書き込み可能なフォルダーに `ScreenClip.exe` という名前で置いてください。管理者権限が必要な場所では差し替えできません。コミット ID の入る `build.ps1` または CI のビルドを使用してください。Visual Studio 単独のビルド（Version が「未設定」）では自動更新を行いません。この機能を持たない旧版からの初回導入は手動で差し替えてください。
+
 ## 必要な環境
 
 - Windows 10/11 の 64bit 版
@@ -27,6 +45,16 @@ PowerShell で `./build.ps1` を実行します。Windows に付属する .NET F
 
 設定は `%APPDATA%\ScreenClip\settings.json` に保存されます。JPG は品質 90 で保存します。
 
+`./tests/run.ps1` で撮影・加工・設定のスモークテストと更新テストを実行します。更新テストは疑似 HTTP 応答と一時フォルダーを使用し、トークンを送らない取得、更新情報の検証、配布スクリプトが作った ZIP の読込、改変・不正 ZIP の拒否、キャンセル、差し替え、起動失敗時と部分更新時の復元を検証します。
+
 ## CI の成果物
 
-`main` への push と手動実行で [Build Windows x64](https://github.com/crono2250/ScreenClip/actions/workflows/windows-build.yml) がテストと x64 ビルドを行います。実行結果の **Artifacts** に `ScreenClip-windows-x64` が表示され、実行ファイル、設定ファイル、SHA-256 チェックサムをダウンロードできます。成果物は 30 日間保持されます。GitHub の Artifacts をダウンロードするにはサインインが必要です。
+`main` への push と手動実行で [Build Windows x64](https://github.com/crono2250/ScreenClip/actions/workflows/windows-build.yml) がテストと x64 ビルドを行います。`package.ps1` がコミット ID と x64 ビルドを検証し、`SHA256SUMS`、`ScreenClip-windows-x64.zip`、`update.json` を作成します。ZIP に含めるのは `ScreenClip.exe`、`ScreenClip.exe.config`、`SHA256SUMS` の 3 ファイルだけです。
+
+成功後は別の公開ジョブが GitHub Actions の自動発行 `GITHUB_TOKEN`（`contents: write`）で ZIP と `update.json` をドラフトにアップロードし、完成してから [Releases](https://github.com/crono2250/ScreenClip/releases) に公開して Latest に設定します。利用者側の個人用トークンや追加のシークレット登録は不要です。公開は `main` の実行に限り、公開ジョブを直列化し、アップロード前後に現在の `main` と一致することを確認します。古いコミットの再実行では Latest を更新しません。リリースタグは `build-<コミット ID>-<実行 ID>-<試行番号>` で、既存の ZIP を上書きしません。
+
+このワークフローを反映した最初の `main` ビルドが成功すると、公開 URL が利用可能になります。それまではアプリは通知を表示せず、現在の版を使い続けます。
+
+実行結果の **Artifacts** の `ScreenClip-windows-x64` にも、実行ファイル、設定ファイル、チェックサム、配布 ZIP、更新情報を 30 日間保存します。Artifacts の手動ダウンロードにはサインインが必要ですが、アプリの自動更新は公開 Releases を使用します。
+
+ローカルで配布パッケージを確認する場合は `./build.ps1` の後に `./package.ps1 -Commit <ビルド元の40桁コミットID>` を実行します。ローカルで生成するだけでは Release は公開されません。
